@@ -8,6 +8,8 @@ const fs = require('fs');
 const endOfLine = require('os').EOL;
 const sleep = (waitTimeInMs) => new Promise(resolve => setTimeout(resolve, waitTimeInMs));
 
+const _BAUD = 115200;
+
 async function main() {
    let selectedPort;
    const logFile = getLogFilename();
@@ -84,57 +86,63 @@ async function main() {
             }
             if (retry) {
                await sleep(1000);   
+            } else {
+               const port = new SerialPort(selectedPort.comName, { baudRate: _BAUD }, (err) => {
+                  if (err != null && err != undefined) {
+                     console.error('Error opening port: ' + err);
+                     retry = true;
+                  }
+               });
+               const parser = port.pipe(new Readline({ delimiter: '\n' }));
+               // Read the port data
+               port.on("open", () => {
+                 console.log('Serial port open (' + selectedPort.comName + ')');
+               });
+               port.on("close", () => {
+                  console.log('Serial port closed!');
+                  retry = true;
+               });
+               let remoteLat;
+               let remoteLong;
+               let localLat;
+               let localLong;
+               parser.on('data', data =>{
+                  if (data.trim().length == 0) {
+                     return;
+                  }
+                  if (data.startsWith("REMOTE:")) {
+                     let relevantData = data.replace('REMOTE:', '');
+                     let logData = "Remote coordinates:" + relevantData;
+                     console.log(logData);
+                     dataLog(logData, logFile);
+                     let parts = relevantData.split(',');
+                     remoteLat = parts[0].trim();
+                     remoteLong = parts[1].trim();
+                  } else if (data.startsWith("LOCAL:")) {
+                     let relevantData = data.replace('LOCAL:', '');
+                     let logData = "Local coordinates:" + relevantData;
+                     console.log(logData);
+                     dataLog(logData, logFile);
+                     let parts = relevantData.split(',');
+                     localLat = parts[0].trim();
+                     localLong = parts[1].trim();
+                     if (remoteLat && remoteLong && localLat && localLong) {
+                        let direction = getDirection(remoteLat - localLat, remoteLong - localLong);
+                        let dist = 'Computed distance: ' + computeDistance(localLat, localLong, remoteLat, remoteLong) + ' meters ' + direction;
+                        console.log("\n", dist, "\n");
+                        dataLog(dist, logFile);
+                        // console.log('Computed distance: ', distanceInKmBetweenEarthCoordinates(localLat, localLong, remoteLat, remoteLong, {unit: 'meter'}), ' meters');
+                     }
+                  } else {
+                     if (!data.startsWith('Distance:')) {
+                        let logData = 'Control message: ' + data;
+                        console.log(logData);
+                        dataLog(logData, logFile);
+                     }
+                  }
+               });
             }
          }
-         
-         const port = new SerialPort(selectedPort.comName, { baudRate: 9600 }, (err) => {
-            console.error('Serial Port Error: ' + err);
-            retry = true;
-         });
-         const parser = port.pipe(new Readline({ delimiter: '\n' }));
-         // Read the port data
-         port.on("open", () => {
-           console.log('Serial port open (' + selectedPort.comName + ')');
-         });
-         let remoteLat;
-         let remoteLong;
-         let localLat;
-         let localLong;
-         parser.on('data', data =>{
-            if (data.trim().length == 0) {
-               return;
-            }
-            if (data.startsWith("REMOTE:")) {
-               let relevantData = data.replace('REMOTE:', '');
-               let logData = "Remote coordinates:" + relevantData;
-               console.log(logData);
-               dataLog(logData, logFile);
-               let parts = relevantData.split(',');
-               remoteLat = parts[0].trim();
-               remoteLong = parts[1].trim();
-            } else if (data.startsWith("LOCAL:")) {
-               let relevantData = data.replace('LOCAL:', '');
-               let logData = "Local coordinates:" + relevantData;
-               console.log(logData);
-               dataLog(logData, logFile);
-               let parts = relevantData.split(',');
-               localLat = parts[0].trim();
-               localLong = parts[1].trim();
-               if (remoteLat && remoteLong && localLat && localLong) {
-                  let direction = getDirection(remoteLat - localLat, remoteLong - localLong);
-                  let dist = 'Computed distance: ' + computeDistance(localLat, localLong, remoteLat, remoteLong) + ' meters ' + direction;
-                  console.log("\n", dist, "\n");
-                  dataLog(dist, logFile);
-                  // console.log('Computed distance: ', distanceInKmBetweenEarthCoordinates(localLat, localLong, remoteLat, remoteLong, {unit: 'meter'}), ' meters');
-               }
-            } else {
-               if (!data.startsWith('Distance:')) {
-                  let logData = 'Control message: ' + data;
-                  console.log(logData);
-                  dataLog(logData, logFile);
-               }
-            }
-         });
          
          while (!retry) {
             await sleep(1000);   
