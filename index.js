@@ -39,11 +39,7 @@ async function main() {
                retry = false;
                break;
             }
-            await SerialPort.list((err, ports) => {
-               if (err) {
-                  console.log('Error! ', err);
-                  process.exit(-1);
-               }
+            await SerialPort.list().then((ports) => {
                if (ports.length == 0) {
                   if (first) {
                      console.log("No available ports found. Waiting for device to connect...");
