@@ -12,7 +12,24 @@ const _BAUD = 115200;
 
 async function main() {
    let selectedPort;
-   const logFile = getLogFilename();
+   let instrumentNumber = 'data';
+   const rl = consoleReadLine.createInterface({
+                     input: process.stdin,
+                     output: process.stdout
+                  });
+   console.log("Enter instrument number [DXX? or SXX?]:");
+   let waitForNum = true
+   rl.prompt();
+   rl.on('line', (num) => {
+     instrumentNumber = num;
+     waitForNum = false;
+   });
+
+   while (waitForNum) {
+      await sleep(1000);  
+   }
+
+   const logFile = getLogFilename(instrumentNumber);
    while(true) {
       try {
          let portFound = false;
@@ -40,6 +57,7 @@ async function main() {
                break;
             }
             await SerialPort.list().then((ports) => {
+
                if (ports.length == 0) {
                   if (first) {
                      console.log("No available ports found. Waiting for device to connect...");
@@ -54,10 +72,6 @@ async function main() {
                   console.log("Available ports:");
                   ports.forEach((port) => {
                      console.log(port.comName);
-                  });
-                  const rl = consoleReadLine.createInterface({
-                     input: process.stdin,
-                     output: process.stdout
                   });
                   console.log("Enter selected port: ");
                   rl.prompt();
@@ -78,10 +92,10 @@ async function main() {
                }
             });
             while (wait) {
-               await sleep(1000);   
+               await sleep(1000);  
             }
             if (retry) {
-               await sleep(1000);   
+               await sleep(1000);  
             } else {
                const port = new SerialPort(selectedPort.comName, { baudRate: _BAUD }, (err) => {
                   if (err != null && err != undefined) {
@@ -141,7 +155,7 @@ async function main() {
          }
          
          while (!retry) {
-            await sleep(1000);   
+            await sleep(1000);  
          }
 
       } catch (err) {
@@ -155,12 +169,12 @@ function computeDistance(currentLat, currentLong, otherLat, otherLong) {
       latitude: currentLat,
       longitude: currentLong
     }
-    
+   
     const end = {
       latitude: otherLat,
       longitude: otherLong
     }
-    
+   
     return Math.round(haversine(start, end, {unit: 'meter'}))
 }
 
@@ -174,8 +188,8 @@ function distanceInKmBetweenEarthCoordinates(lat1, lon1, lat2, lon2) {
    lat2 = degreesToRadians(lat2);
  
    var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-           Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2); 
-   var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+           Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2);
+   var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
    return earthRadiusKm * c;
  }
 
@@ -215,15 +229,16 @@ function distanceInKmBetweenEarthCoordinates(lat1, lon1, lat2, lon2) {
    }
  }
 
- function getLogFilename() {
+ function getLogFilename(manualName = null) {
     let ext = '.log'
-    if (!fs.existsSync('data' + ext)) {
-       return 'data.log';
+    let name = manualName ? manualName : 'data';
+    if (!fs.existsSync(name + ext)) {
+       return name + ext;
     }
     let counter = 1;
-    let filename = 'data' + counter + ext;
+    let filename = name + '(' + counter + ')' + ext;
     while (fs.existsSync(filename)) {
-       filename = 'data' + (++counter) + ext;
+       filename = name + '(' + (++counter) + ')' + ext;
     }
     return filename;
  }
